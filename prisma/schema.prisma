@@ -1,0 +1,270 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum StatusOrcamento {
+  RASCUNHO
+  ENVIADO
+  APROVADO
+  RECUSADO
+}
+
+enum CategoriaEquipamento {
+  CFTV
+  ACESSO
+  COMUNICACAO
+  INFRAESTRUTURA
+}
+
+enum TipoLancamento {
+  RECEITA
+  DESPESA
+}
+
+enum CategoriaLancamento {
+  INSTALACAO
+  MENSALIDADE
+  SERVICO
+  EQUIPAMENTO
+  SALARIO
+  FORNECEDOR
+  ALUGUEL
+  OUTROS
+}
+
+enum StatusContrato {
+  ATIVO
+  ENCERRADO
+  SUSPENSO
+}
+
+enum StatusProposta {
+  RASCUNHO
+  ENVIADA
+  APROVADA
+  RECUSADA
+}
+
+enum TipoNotificacao {
+  CONTRATO_VENCENDO
+  CONTRATO_URGENTE
+  MENSALIDADE_ATRASADA
+  ORCAMENTO_SEM_RESPOSTA
+}
+
+model Cliente {
+  id           String      @id @default(cuid())
+  nome         String
+  cnpj         String?     @unique
+  cpf          String?
+  endereco     String?
+  numero       String?
+  bairro       String?
+  cidade       String?
+  estado       String?
+  cep          String?
+  responsavel  String?
+  telefone     String?
+  email        String?
+  observacoes  String?
+  ativo        Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  orcamentos   Orcamento[]
+  contratos    Contrato[]
+  lancamentos  Lancamento[]
+  propostas    Proposta[]
+
+  @@map("clientes")
+}
+
+model Equipamento {
+  id          String               @id @default(cuid())
+  codigo      String?              @unique
+  nome        String
+  descricao   String?
+  categoria   CategoriaEquipamento
+  precoFornecedor Float?
+  margem          Float?
+  precoBase   Decimal              @db.Decimal(10, 2)
+  unidade     String               @default("un")
+  ativo       Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  itensOrcamento    OrcamentoItem[]
+  itensPropostaItem PropostaItem[]
+
+  @@map("equipamentos")
+}
+
+model Orcamento {
+  id                String          @id @default(cuid())
+  numero            Int             @unique @default(autoincrement())
+  clienteId         String
+  titulo            String
+  descricao         String?
+  status            StatusOrcamento @default(RASCUNHO)
+  valorEquipamentos Decimal         @default(0) @db.Decimal(10, 2)
+  valorMaoDeObra    Decimal         @default(0) @db.Decimal(10, 2)
+  desconto          Decimal         @default(0) @db.Decimal(10, 2)
+  total             Decimal         @default(0) @db.Decimal(10, 2)
+  validadeAte       DateTime?
+  observacoes       String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  cliente Cliente         @relation(fields: [clienteId], references: [id])
+  itens   OrcamentoItem[]
+
+  @@map("orcamentos")
+}
+
+model OrcamentoItem {
+  id             String  @id @default(cuid())
+  orcamentoId    String
+  equipamentoId  String
+  quantidade     Int     @default(1)
+  precoUnitario  Decimal @db.Decimal(10, 2)
+  subtotal       Decimal @db.Decimal(10, 2)
+
+  orcamento   Orcamento   @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  equipamento Equipamento @relation(fields: [equipamentoId], references: [id])
+
+  @@map("orcamento_itens")
+}
+
+model Lancamento {
+  id          String              @id @default(cuid())
+  tipo        TipoLancamento
+  categoria   CategoriaLancamento
+  descricao   String
+  valor       Decimal             @db.Decimal(10, 2)
+  data        DateTime
+  clienteId   String?
+  orcamentoId String?
+  observacoes String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  cliente Cliente? @relation(fields: [clienteId], references: [id])
+
+  @@map("lancamentos")
+}
+
+model Contrato {
+  id           String         @id @default(cuid())
+  clienteId    String
+  numero       String         @unique
+  descricao    String?
+  valorMensal  Decimal        @db.Decimal(10, 2)
+  dataInicio   DateTime
+  dataFim      DateTime?
+  status                 StatusContrato @default(ATIVO)
+  observacoes            String?
+  clausulasPersonalizadas String?
+  createdAt              DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  cliente Cliente @relation(fields: [clienteId], references: [id])
+
+  @@map("contratos")
+}
+
+model Notificacao {
+  id        String          @id @default(cuid())
+  tipo      TipoNotificacao
+  titulo    String
+  mensagem  String
+  lida      Boolean         @default(false)
+  link      String?
+  createdAt DateTime        @default(now())
+
+  @@index([lida, createdAt])
+  @@map("notificacoes")
+}
+
+model Proposta {
+  id                  String         @id @default(cuid())
+  numero              Int            @unique @default(autoincrement())
+  clienteId           String
+  status              StatusProposta @default(RASCUNHO)
+  apresentacaoEmpresa String?
+  escopoInstalacao    String?
+  observacoes         String?
+  validadeDias        Int            @default(15)
+  totalGeral          Decimal        @default(0) @db.Decimal(10, 2)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  cliente   Cliente            @relation(fields: [clienteId], references: [id])
+  secoes    PropostaSecao[]
+  condicoes PropostaCondicao[]
+
+  @@map("propostas")
+}
+
+model PropostaSecao {
+  id         String @id @default(cuid())
+  propostaId String
+  nome       String
+  ordem      Int    @default(0)
+
+  proposta Proposta      @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+  itens    PropostaItem[]
+
+  @@map("proposta_secoes")
+}
+
+model PropostaItem {
+  id            String  @id @default(cuid())
+  secaoId       String
+  equipamentoId String?
+  descricao     String
+  quantidade    Int     @default(1)
+  valorUnitario Decimal @db.Decimal(10, 2)
+  valorTotal    Decimal @db.Decimal(10, 2)
+
+  secao       PropostaSecao @relation(fields: [secaoId], references: [id], onDelete: Cascade)
+  equipamento Equipamento?  @relation(fields: [equipamentoId], references: [id])
+
+  @@map("proposta_itens")
+}
+
+model PropostaCondicao {
+  id         String  @id @default(cuid())
+  propostaId String
+  titulo     String
+  valor      Decimal @db.Decimal(10, 2)
+  descricao  String?
+
+  proposta Proposta @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+
+  @@map("proposta_condicoes")
+}
+
+model Configuracao {
+  id           String   @id @default(cuid())
+  nomeEmpresa  String
+  cnpj         String?
+  telefone     String?
+  email        String?
+  site         String?
+  endereco     String?
+  cidade       String?
+  estado       String?
+  cep          String?
+  logoUrl      String?
+  descricao    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("configuracoes")
+}
